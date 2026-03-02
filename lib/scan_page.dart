@@ -6,51 +6,38 @@ class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
 
   @override
-  _ScanPageState createState() => _ScanPageState();
+  State<ScanPage> createState() => _ScanPageState();
 }
 
 class _ScanPageState extends State<ScanPage> {
-  final TextEditingController _articleController = TextEditingController();
-  final TextEditingController _sizeController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController();
-  final FocusNode _codeFocusNode = FocusNode();
+  final _articleController = TextEditingController();
+  final _sizeController = TextEditingController();
+  final _codeController = TextEditingController();
+  final _codeFocusNode = FocusNode();
   final List<String> _codes = [];
-  String _errorMessage = '';
+  bool _hasError = false;
 
-  final String _telegramBotToken =
-      '7428891276:AAFevI_0HhcEjELCvJp6afdgmFQxxMUvJCo';
-  final String _telegramChatId = '-1002150617251';
+  final String _botToken = '7428891276:AAGWpszMVc_Pcz-qU5a00EEFpRnIuCeoNRY';
+  final String _chatId = '-1002150617251';
 
-  void _addItem() {
-    final String code = _codeController.text.trim();
-    if (_articleController.text.isEmpty ||
-        _sizeController.text.isEmpty ||
+  void _addCode() {
+    final code = _codeController.text.trim();
+
+    if (_articleController.text
+        .trim()
+        .isEmpty ||
+        _sizeController.text
+            .trim()
+            .isEmpty ||
         code.isEmpty) {
-      setState(() {
-        _errorMessage = 'Заполните все поля!';
-        _codeController.clear();
-        _codeFocusNode.requestFocus();
-      });
+      setState(() => _hasError = true);
+      _codeController.clear();
+      _codeFocusNode.requestFocus();
       return;
     }
 
     if (_codes.contains(code)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Код уже существует!'),
-            ],
-          ),
-          backgroundColor: const Color(0xFFe74c3c),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _showSnack('Код уже добавлен', isError: true);
       _codeController.clear();
       _codeFocusNode.requestFocus();
       return;
@@ -58,142 +45,67 @@ class _ScanPageState extends State<ScanPage> {
 
     setState(() {
       _codes.insert(0, code);
-      _errorMessage = '';
+      _hasError = false;
       _codeController.clear();
-      _codeFocusNode.requestFocus();
     });
-
-    // Показываем успешное добавление
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Text('Код добавлен! Всего: ${_codes.length}'),
-          ],
-        ),
-        backgroundColor: const Color(0xFF27ae60),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    _codeFocusNode.requestFocus();
+    _showSnack('Добавлено: ${_codes.length}', isError: false);
   }
 
-  Future<void> _sendToTelegram() async {
+  Future<void> _send() async {
+    final article = _articleController.text.trim();
+    final size = _sizeController.text.trim();
+
+    if (article.isEmpty || size.isEmpty) {
+      _showSnack('Заполните артикул и размер', isError: true);
+      return;
+    }
+    if (_codes.isEmpty) {
+      _showSnack('Нет кодов для отправки', isError: true);
+      return;
+    }
+
     try {
-      final content = _codes.join('\n');
-      final articleName = _articleController.text.trim();
-      final size = _sizeController.text.trim();
-
-      if (articleName.isEmpty || size.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Введите артикул и размер для отправки файла!'),
-              ],
-            ),
-            backgroundColor: const Color(0xFFe74c3c),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        return;
-      }
-
-      if (_codes.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.warning, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Добавьте хотя бы один код!'),
-              ],
-            ),
-            backgroundColor: const Color(0xFFf39c12),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        return;
-      }
-
-      final fileName = '${articleName}_$size.txt';
-
       final url = Uri.parse(
-          'https://api.telegram.org/bot$_telegramBotToken/sendDocument');
+          'https://api.telegram.org/bot$_botToken/sendDocument');
       final request = http.MultipartRequest('POST', url)
-        ..fields['chat_id'] = _telegramChatId
+        ..fields['chat_id'] = _chatId
         ..files.add(http.MultipartFile.fromString(
           'document',
-          content,
-          filename: fileName,
+          _codes.join('\n'),
+          filename: '${article}_$size.txt',
         ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Файл успешно отправлен!'),
-              ],
-            ),
-            backgroundColor: const Color(0xFF27ae60),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-        Future.delayed(const Duration(seconds: 2), () {
+        _showSnack('Файл отправлен!', isError: false);
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const MenuPage()),
+            MaterialPageRoute(builder: (_) => const MenuPage()),
           );
-        });
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Ошибка отправки файла!'),
-              ],
-            ),
-            backgroundColor: const Color(0xFFe74c3c),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        _showSnack('Ошибка отправки', isError: true);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Ошибка: $e')),
-            ],
-          ),
-          backgroundColor: const Color(0xFFe74c3c),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showSnack('Ошибка: $e', isError: true);
     }
+  }
+
+  void _showSnack(String text, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text, style: const TextStyle(fontSize: 13)),
+        backgroundColor: isError ? const Color(0xFFc0392b) : const Color(
+            0xFF27ae60),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: Duration(seconds: isError ? 2 : 1),
+      ),
+    );
   }
 
   @override
@@ -210,47 +122,47 @@ class _ScanPageState extends State<ScanPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1a1a2e),
       appBar: AppBar(
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Color(0xFF2c3e50), // Темно-синий
-                Color(0xFF3498db), // Джинсовый синий
-                Color(0xFF1a252f), // Индиго
-              ],
+              colors: [Color(0xFF2c3e50), Color(0xFF3498db)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        titleSpacing: 0,
         title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
               'Сканирование КМ',
               style: TextStyle(
                 color: Colors.white,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
               ),
             ),
+            const Spacer(),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.qr_code, color: Colors.white, size: 16),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.qr_code, color: Colors.white, size: 14),
+                  const SizedBox(width: 5),
                   Text(
                     '${_codes.length}',
                     style: const TextStyle(
-                      fontSize: 16,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: 14,
                     ),
                   ),
                 ],
@@ -258,273 +170,49 @@ class _ScanPageState extends State<ScanPage> {
             ),
           ],
         ),
-        elevation: 0,
       ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF1a1a2e), // Темный фон
-              Color(0xFF16213e), // Темно-синий
-              Color(0xFF0f3460), // Глубокий синий
-            ],
+            colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f3460)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             child: Column(
               children: [
-                // Информационная панель
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF4a69bd),
-                        Color(0xFF1e3799),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.verified_outlined,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Сканирование кодов маркировки\nЧестный ЗНАК',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Поля ввода
-                _buildTextField(
-                  controller: _articleController,
-                  label: 'Артикул',
-                  icon: Icons.label_outline,
-                  hint: 'Введите артикул товара',
-                ),
-
-                const SizedBox(height: 16),
-
-                _buildTextField(
-                  controller: _sizeController,
-                  label: 'Размер',
-                  icon: Icons.straighten,
-                  hint: 'Введите размер',
-                ),
-
-                const SizedBox(height: 16),
-
-                _buildTextField(
-                  controller: _codeController,
-                  focusNode: _codeFocusNode,
-                  label: 'Код маркировки',
-                  icon: Icons.qr_code_scanner,
-                  hint: 'Отсканируйте или введите код',
-                  onSubmitted: (value) => _addItem(),
-                  suffixIcon: IconButton(
-                    icon:
-                        const Icon(Icons.add_circle, color: Color(0xFF4a69bd)),
-                    onPressed: _addItem,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Сообщение об ошибке
-                if (_errorMessage.isNotEmpty)
+                _buildField(_articleController, 'Артикул', Icons.label_outline),
+                const SizedBox(height: 10),
+                _buildField(_sizeController, 'Размер', Icons.straighten),
+                const SizedBox(height: 10),
+                _buildCodeField(),
+                if (_hasError) ...[
+                  const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFe74c3c).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border:
-                          Border.all(color: const Color(0xFFe74c3c), width: 1),
+                      color: const Color(0xFFe74c3c).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFe74c3c)
+                          .withOpacity(0.5)),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline,
-                            color: Color(0xFFe74c3c)),
-                        const SizedBox(width: 8),
-                        Text(
-                          _errorMessage,
-                          style: const TextStyle(
-                            color: Color(0xFFe74c3c),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    child: const Text(
+                      'Заполните все поля',
+                      style: TextStyle(color: Color(0xFFe74c3c), fontSize: 12),
                     ),
                   ),
-
-                const SizedBox(height: 20),
-
-                // Список кодов
+                ],
+                const SizedBox(height: 12),
                 Expanded(
-                  child: _codes.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          itemCount: _codes.length,
-                          itemBuilder: (context, index) {
-                            final displayNumber = _codes.length - index;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF2c3e50),
-                                    Color(0xFF34495e),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(15),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 5,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        Color(0xFF4a69bd),
-                                        Color(0xFF1e3799),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '$displayNumber',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  _codes[index],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                trailing: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFe74c3c)
-                                        .withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      color: Color(0xFFe74c3c),
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _codes.removeAt(index);
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                  child: _codes.isEmpty ? _buildEmpty() : _buildList(),
                 ),
-
-                const SizedBox(height: 20),
-
-                // Кнопка завершения
-                Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF4a69bd),
-                        Color(0xFF1e3799),
-                        Color(0xFF0c2461),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF3498db).withOpacity(0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(30),
-                      onTap: _sendToTelegram,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 30),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.upload_rounded,
-                              size: 24,
-                              color: Colors.white,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Отправить в Telegram',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 12),
+                _buildSendButton(),
               ],
             ),
           ),
@@ -533,77 +221,182 @@ class _ScanPageState extends State<ScanPage> {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    FocusNode? focusNode,
-    required String label,
-    required IconData icon,
-    required String hint,
-    Function(String)? onSubmitted,
-    Widget? suffixIcon,
-  }) {
+  Widget _buildField(TextEditingController controller, String label,
+      IconData icon) {
     return Container(
+      height: 48,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        color: Colors.white.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.12)),
       ),
       child: TextField(
         controller: controller,
-        focusNode: focusNode,
-        onSubmitted: onSubmitted,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: Colors.white, fontSize: 14),
         decoration: InputDecoration(
           labelText: label,
-          hintText: hint,
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-          prefixIcon: Icon(icon, color: const Color(0xFF4a69bd)),
-          suffixIcon: suffixIcon,
+          labelStyle: TextStyle(
+              color: Colors.white.withOpacity(0.6), fontSize: 13),
+          prefixIcon: Icon(icon, color: const Color(0xFF4a69bd), size: 18),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(16),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 14),
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildCodeField() {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.12)),
+      ),
+      child: TextField(
+        controller: _codeController,
+        focusNode: _codeFocusNode,
+        onSubmitted: (_) => _addCode(),
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: 'Код маркировки',
+          labelStyle: TextStyle(
+              color: Colors.white.withOpacity(0.6), fontSize: 13),
+          prefixIcon: const Icon(
+              Icons.qr_code_scanner, color: Color(0xFF4a69bd), size: 18),
+          suffixIcon: IconButton(
+            icon: const Icon(
+                Icons.add_circle_outline, color: Color(0xFF4a69bd), size: 20),
+            onPressed: _addCode,
+            padding: EdgeInsets.zero,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    return ListView.builder(
+      itemCount: _codes.length,
+      itemBuilder: (context, index) {
+        final num = _codes.length - index;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4a69bd), Color(0xFF1e3799)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(
+                    '$num',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _codes[index],
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _codes.removeAt(index)),
+                child: Icon(Icons.close, color: Colors.white.withOpacity(0.4),
+                    size: 18),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmpty() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(40),
-            ),
-            child: const Icon(
-              Icons.qr_code_2,
-              size: 40,
-              color: Color(0xFF4a69bd),
-            ),
-          ),
-          const SizedBox(height: 16),
+          Icon(Icons.qr_code_2, size: 44, color: Colors.white.withOpacity(0.2)),
+          const SizedBox(height: 12),
           Text(
-            'Нет отсканированных кодов',
+            'Нет кодов',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
+                color: Colors.white.withOpacity(0.4), fontSize: 14),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            'Введите артикул, размер и начните\nсканировать коды маркировки',
-            textAlign: TextAlign.center,
+            'Начните сканирование',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 14,
-            ),
+                color: Colors.white.withOpacity(0.25), fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSendButton() {
+    return Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4a69bd), Color(0xFF0c2461)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3498db).withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _send,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.send_rounded, size: 20, color: Colors.white),
+              SizedBox(width: 10),
+              Text(
+                'Отправить в Telegram',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
